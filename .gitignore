@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Local configuration and credential files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated verification output
+/generated-artifacts/
+*.tsbuildinfo

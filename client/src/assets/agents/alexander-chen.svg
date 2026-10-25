@@ -1,0 +1,44 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="200" cy="200" r="200" fill="#1a1a1a"/>
+  
+  <!-- Face -->
+  <ellipse cx="200" cy="190" rx="90" ry="105" fill="#f0d5a8"/>
+  
+  <!-- Hair (professional cut) -->
+  <path d="M110 140 Q200 100 290 140 Q295 160 290 180 Q285 195 275 205 L270 190 Q260 175 200 170 Q140 175 130 190 L125 205 Q115 195 110 180 Q105 160 110 140 Z" fill="#2c1810"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="175" cy="175" rx="10" ry="7" fill="white"/>
+  <ellipse cx="225" cy="175" rx="10" ry="7" fill="white"/>
+  <circle cx="175" cy="176" r="5" fill="#1a1a1a"/>
+  <circle cx="225" cy="176" r="5" fill="#1a1a1a"/>
+  <circle cx="177" cy="174" r="1.5" fill="white"/>
+  <circle cx="227" cy="174" r="1.5" fill="white"/>
+  
+  <!-- Eyebrows (thicker, masculine) -->
+  <path d="M165 165 Q175 162 185 165" stroke="#2c1810" stroke-width="4" fill="none"/>
+  <path d="M215 165 Q225 162 235 165" stroke="#2c1810" stroke-width="4" fill="none"/>
+  
+  <!-- Nose -->
+  <path d="M200 185 L194 202 Q200 207 206 202 Z" fill="#e8c798"/>
+  
+  <!-- Mouth -->
+  <path d="M188 222 Q200 228 212 222" stroke="#c4887c" stroke-width="2" fill="none" stroke-linecap="round"/>
+  
+  <!-- Neck -->
+  <rect x="170" y="285" width="60" height="65" fill="#f0d5a8"/>
+  
+  <!-- Professional suit -->
+  <path d="M115 330 Q150 320 200 325 Q250 320 285 330 L290 400 L110 400 Z" fill="#1a1a2e"/>
+  
+  <!-- Dress shirt -->
+  <path d="M155 325 Q200 320 245 325 L250 380 L150 380 Z" fill="#f8f9fa"/>
+  
+  <!-- Tie -->
+  <path d="M195 325 L205 325 L210 380 L190 380 Z" fill="#8b0000"/>
+  <path d="M195 325 L205 325 L200 340 Z" fill="#a00000"/>
+  
+  <!-- Suit collar -->
+  <path d="M170 325 L185 335 L200 330 L215 335 L230 325" stroke="#16213e" stroke-width="3" fill="none"/>
+</svg>

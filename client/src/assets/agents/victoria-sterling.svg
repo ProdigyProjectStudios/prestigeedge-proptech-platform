@@ -1,0 +1,43 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="200" cy="200" r="200" fill="#1a1a1a"/>
+  
+  <!-- Face -->
+  <ellipse cx="200" cy="190" rx="85" ry="100" fill="#f4c2a1"/>
+  
+  <!-- Hair -->
+  <path d="M115 130 Q200 90 285 130 Q300 150 295 180 Q290 200 280 220 L270 200 Q260 180 200 175 Q140 180 130 200 L120 220 Q110 200 105 180 Q100 150 115 130 Z" fill="#8b4513"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="175" cy="175" rx="12" ry="8" fill="white"/>
+  <ellipse cx="225" cy="175" rx="12" ry="8" fill="white"/>
+  <circle cx="175" cy="175" r="6" fill="#2c5530"/>
+  <circle cx="225" cy="175" r="6" fill="#2c5530"/>
+  <circle cx="177" cy="173" r="2" fill="white"/>
+  <circle cx="227" cy="173" r="2" fill="white"/>
+  
+  <!-- Eyebrows -->
+  <path d="M165 165 Q175 160 185 165" stroke="#654321" stroke-width="3" fill="none"/>
+  <path d="M215 165 Q225 160 235 165" stroke="#654321" stroke-width="3" fill="none"/>
+  
+  <!-- Nose -->
+  <path d="M200 185 L195 200 Q200 205 205 200 Z" fill="#e6b088"/>
+  
+  <!-- Mouth -->
+  <path d="M185 220 Q200 230 215 220" stroke="#c4887c" stroke-width="3" fill="none"/>
+  
+  <!-- Neck -->
+  <rect x="175" y="280" width="50" height="60" fill="#f4c2a1"/>
+  
+  <!-- Professional blazer -->
+  <path d="M120 320 Q150 310 200 315 Q250 310 280 320 L285 400 L115 400 Z" fill="#2c3e50"/>
+  
+  <!-- Blouse -->
+  <path d="M160 315 Q200 310 240 315 L245 370 L155 370 Z" fill="#ecf0f1"/>
+  
+  <!-- Collar -->
+  <path d="M175 315 L185 325 L200 320 L215 325 L225 315" stroke="#bdc3c7" stroke-width="2" fill="none"/>
+  
+  <!-- Professional makeup/lipstick -->
+  <ellipse cx="200" cy="220" rx="8" ry="4" fill="#d63384"/>
+</svg>

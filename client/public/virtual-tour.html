@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Tour</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #panorama {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="panorama"></div>
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const imageUrl = urlParams.get('image') || 'https://pannellum.org/images/alma.jpg';
+        const title = urlParams.get('title') || 'Virtual Tour';
+        
+        // Initialize panorama viewer
+        pannellum.viewer('panorama', {
+            "type": "equirectangular",
+            "panorama": imageUrl,
+            "autoLoad": true,
+            "showControls": true,
+            "title": title,
+            "hfov": 110,
+            "pitch": 0,
+            "yaw": 0
+        });
+    </script>
+</body>
+</html>
