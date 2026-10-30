@@ -29,10 +29,12 @@ This milestone replaces restart-sensitive in-memory Deal Room state with an **op
 
 ## Tests
 
-- `npm run test:dealroom` — demo access, scoped preview and token hashing.
+- `npm run test:dealroom` — HTTP-level synthetic NDA walkthrough (401/403 checks, duplicate NDA, cross-buyer denial, idempotent signing, protected CIM and admin audit), plus security-helper tests. Runs automatically for all pull requests and main-branch pushes.
 - `DEALROOM_TEST_DATABASE_URL=<isolated-staging-db-url> DEALROOM_TEST_CONFIRM=yes npm run test:dealroom:postgres` — creates synthetic test sessions in **only** the explicitly named test DB, verifies access isolation, idempotent signing and durable event state. This suite skips by default.
 - `npm run build` — application bundle.
 - `npm run check` — existing full TypeScript issues are documented in `docs/publication.md`; do not misrepresent baseline errors as newly introduced or resolved.
+
+The GitHub Actions workflow also runs `npm ci` and `npm run build` for every pull request and main update. A passing build does not replace the existing full TypeScript check or database/integration acceptance tests.
 
 This branch has not run a live database migration, external e-signature event, CRM sync or object-storage round trip. Those are release gates, not completed features.
 
