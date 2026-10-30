@@ -70,7 +70,8 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      // Deal Room responses can contain bearer credentials, access grants or private records.
+      if (capturedJsonResponse && !path.startsWith("/api/dealroom/")) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
@@ -103,6 +104,9 @@ app.get("/health", (req: Request, res: Response) => {
     console.error("Failed to connect to database, exiting...");
     process.exit(1);
   }
+
+  const { ensureDealRoomStorageReady } = await import("./dealroom/ready");
+  await ensureDealRoomStorageReady();
 
   const server = await registerRoutes(app);
 

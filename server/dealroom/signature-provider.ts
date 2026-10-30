@@ -59,7 +59,8 @@ export class DemoSignatureProvider implements SignatureProvider {
   verifyWebhook(payload: unknown, signature: string): boolean {
     // In production: verify DocuSign Connect HMAC-SHA256 signature.
     // Never trust the webhook payload without this check.
-    return signature === "demo-webhook-secret";
+    // A demonstration provider must never authenticate a real callback.
+    return false;
   }
 }
 
