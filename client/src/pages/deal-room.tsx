@@ -10,6 +10,7 @@ interface DemoSession {
   sessionToken: string;
   role: DemoRole;
   name: string;
+  kind?: "demo" | "authenticated";
 }
 
 interface PublicTeaser {
@@ -30,6 +31,8 @@ interface NDAStatus {
   hasEnvelope: boolean;
   envelopeId: string | null;
   envelopeStatus: string | null;
+  envelopeProvider?: string | null;
+  providerTestMode?: boolean | null;
   hasAccess: boolean;
   grantId: string | null;
 }
@@ -102,6 +105,7 @@ function drFetch(path: string, opts: RequestInit = {}) {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { "X-DR-Session": token } : {}),
+      ...(localStorage.getItem("token") ? { Authorization: "Bearer " + localStorage.getItem("token") } : {}),
       ...(opts.headers ?? {}),
     },
   });
@@ -137,41 +141,58 @@ const EVENT_ICONS: Record<string, typeof Eye> = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function DemoModeBanner({ session, onSwitch }: { session: DemoSession | null; onSwitch: (role: DemoRole) => void }) {
+function DemoModeBanner({
+  session, demoAccess, hasAccountLogin, onSwitch, onUseAccount,
+}: {
+  session: DemoSession | null;
+  demoAccess: boolean;
+  hasAccountLogin: boolean;
+  onSwitch: (role: DemoRole) => void;
+  onUseAccount: () => void;
+}) {
+  const accountMode = session?.kind === "authenticated";
   return (
     <div className="border-b border-luxe-bronze/30 bg-luxe-bronze/5">
-      <div className="max-w-5xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <div className="max-w-5xl mx-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-2 mr-auto">
-          <span className="text-[9px] uppercase tracking-[0.35em] text-luxe-bronze border border-luxe-bronze/40 px-2 py-0.5">Demo Mode</span>
-          {session && (
-            <span className="text-xs text-luxe-text-muted">
-              Signed in as <span className="text-luxe-text font-medium">{session.name}</span>
-              <span className="ml-1 text-luxe-bronze">({session.role})</span>
-            </span>
-          )}
+          <span className="text-[9px] uppercase tracking-[0.25em] text-luxe-bronze border border-luxe-bronze/40 px-2 py-1">
+            {accountMode ? "Authenticated account" : "Synthetic portfolio demo"}
+          </span>
+          {session && <span className="text-xs text-luxe-text-muted">
+            {session.name} <span className="text-luxe-bronze">({session.role})</span>
+          </span>}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] uppercase tracking-widest text-luxe-text-muted mr-1">Switch role:</span>
-          <button
-            onClick={() => onSwitch("buyer")}
-            className={`h-7 px-3 text-[10px] uppercase tracking-widest border transition-colors ${
-              session?.role === "buyer"
-                ? "bg-luxe-bronze text-luxe-bg border-luxe-bronze"
-                : "border-luxe-border/50 text-luxe-text-muted hover:border-luxe-bronze/50 hover:text-luxe-text"
-            }`}
-          >
-            <User className="h-3 w-3 inline mr-1" strokeWidth={1.5} />Buyer
-          </button>
-          <button
-            onClick={() => onSwitch("admin")}
-            className={`h-7 px-3 text-[10px] uppercase tracking-widest border transition-colors ${
-              session?.role === "admin"
-                ? "bg-luxe-bronze text-luxe-bg border-luxe-bronze"
-                : "border-luxe-border/50 text-luxe-text-muted hover:border-luxe-bronze/50 hover:text-luxe-text"
-            }`}
-          >
-            <Settings className="h-3 w-3 inline mr-1" strokeWidth={1.5} />Admin
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {demoAccess && !accountMode && (
+            <>
+              <span className="text-[9px] uppercase tracking-widest text-luxe-text-muted mr-1">Preview role:</span>
+              <button type="button" onClick={() => onSwitch("buyer")}
+                className={session?.role === "buyer"
+                  ? "h-8 px-3 text-[10px] uppercase tracking-widest border border-luxe-bronze bg-luxe-bronze text-luxe-bg"
+                  : "h-8 px-3 text-[10px] uppercase tracking-widest border border-luxe-border/50 text-luxe-text-muted hover:border-luxe-bronze/50"}>
+                Buyer
+              </button>
+              <button type="button" onClick={() => onSwitch("admin")}
+                className={session?.role === "admin"
+                  ? "h-8 px-3 text-[10px] uppercase tracking-widest border border-luxe-bronze bg-luxe-bronze text-luxe-bg"
+                  : "h-8 px-3 text-[10px] uppercase tracking-widest border border-luxe-border/50 text-luxe-text-muted hover:border-luxe-bronze/50"}>
+                Admin
+              </button>
+            </>
+          )}
+          {hasAccountLogin && !accountMode && (
+            <button type="button" onClick={onUseAccount}
+              className="h-8 px-3 text-[10px] uppercase tracking-widest border border-luxe-bronze/60 text-luxe-bronze hover:bg-luxe-bronze/10">
+              <Shield className="h-3 w-3 inline mr-2" />Use my account
+            </button>
+          )}
+          {!demoAccess && !hasAccountLogin && (
+            <Link href="/login">
+              <span className="text-[10px] uppercase tracking-widest border border-luxe-bronze/60 text-luxe-bronze px-4 py-2 cursor-pointer">
+                Sign in for Deal Room access
+              </span>
+            </Link>
+          )}
         </div>
       </div>
     </div>
@@ -255,6 +276,7 @@ function TeaserScreen({
   ndaStatus,
   onRequestNDA,
   onViewConfidential,
+  onRefreshStatus,
   loading,
 }: {
   listing: PublicTeaser;
@@ -262,11 +284,13 @@ function TeaserScreen({
   ndaStatus: NDAStatus | null;
   onRequestNDA: () => void;
   onViewConfidential: () => void;
+  onRefreshStatus: () => void;
   loading: boolean;
 }) {
   const isBuyer = session?.role === "buyer";
   const hasAccess = ndaStatus?.hasAccess;
   const hasPending = ndaStatus?.hasEnvelope && !hasAccess;
+  const externalNda = ndaStatus?.envelopeProvider === "DropboxSign";
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
@@ -296,10 +320,11 @@ function TeaserScreen({
                 View Confidential Record
               </button>
             ) : hasPending ? (
-              <div className="h-11 px-5 bg-luxe-surface border border-luxe-border/50 text-luxe-text-muted text-[10px] uppercase tracking-widest flex items-center gap-2">
-                <Clock className="h-4 w-4" strokeWidth={1.5} />
-                NDA Pending Signature
-              </div>
+              <button type="button" onClick={externalNda ? onRefreshStatus : onRequestNDA} disabled={loading}
+                className="h-11 px-5 bg-luxe-surface border border-luxe-bronze/40 text-luxe-text text-[10px] uppercase tracking-widest flex items-center gap-2 hover:border-luxe-bronze disabled:opacity-50">
+                <Clock className="h-4 w-4 text-luxe-bronze" strokeWidth={1.5} />
+                {externalNda ? "Refresh NDA Verification" : "Continue Demo NDA"}
+              </button>
             ) : (
               <button
                 onClick={onRequestNDA}
@@ -690,6 +715,16 @@ export default function DealRoomPage() {
   const [adminData, setAdminData] = useState<AdminView | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [demoAccess, setDemoAccess] = useState(true);
+  const [hasAccountLogin, setHasAccountLogin] = useState(() => Boolean(localStorage.getItem("token")));
+
+  useEffect(() => {
+    fetch("/api/dealroom/capabilities")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setDemoAccess(data.demoAccess === true); })
+      .catch(() => {});
+  }, []);
 
   // Restore session from sessionStorage on mount
   useEffect(() => {
@@ -698,7 +733,7 @@ export default function DealRoomPage() {
     drFetch("/api/dealroom/session")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setSession({ sessionToken: token, role: data.role, name: data.name });
+        if (data) setSession({ sessionToken: token, role: data.role, name: data.name, kind: data.kind });
       })
       .catch(() => {});
   }, []);
@@ -725,6 +760,27 @@ export default function DealRoomPage() {
     const data = await res.json();
     storeToken(data.sessionToken);
     setSession(data);
+  }, [listing]);
+
+  const useAccountSession = useCallback(async () => {
+    const jwtToken = localStorage.getItem("token");
+    if (!jwtToken) { setError("Sign in to your account first."); return; }
+    setLoading(true);
+    setError("");
+    const response = await fetch("/api/dealroom/auth-session", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + jwtToken, "Content-Type": "application/json" },
+    });
+    setLoading(false);
+    if (!response.ok) { setError("Could not open authenticated Deal Room session."); return; }
+    const data = await response.json() as DemoSession;
+    clearToken();
+    storeToken(data.sessionToken);
+    setSession(data);
+    setScreen(listing ? "teaser" : "lookup");
+    setNdaStatus(null);
+    setNotice("Account session active. External signing will be handled by the provider, not a demo button.");
+    setHasAccountLogin(true);
   }, [listing]);
 
   const loadListing = useCallback(async (id: string) => {
@@ -765,17 +821,45 @@ export default function DealRoomPage() {
     }
   }, [session, loadAdminView, screen, listingId]);
 
+  const refreshStatus = useCallback(async () => {
+    if (!listingId) return;
+    setLoading(true);
+    const sr = await drFetch("/api/dealroom/listings/" + encodeURIComponent(listingId) + "/status");
+    setLoading(false);
+    if (!sr.ok) { setError("Could not refresh the NDA verification status."); return; }
+    const status = await sr.json() as NDAStatus;
+    setNdaStatus(status);
+    if (status.hasAccess) setNotice("The completed NDA has been verified and access was granted.");
+    else setNotice("Awaiting the provider's signature verification.");
+  }, [listingId]);
+
   const handleRequestNDA = useCallback(async () => {
     if (!listingId) return;
     setLoading(true);
     setError("");
     const res = await drFetch(`/api/dealroom/listings/${encodeURIComponent(listingId)}/nda`, { method: "POST" });
     setLoading(false);
-    if (!res.ok) { setError("Failed to create NDA envelope."); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      setError(body.error || "Failed to issue NDA.");
+      return;
+    }
     const data = await res.json();
     setPendingEnvelopeId(data.envelopeId);
-    setScreen("nda-confirm");
-  }, [listingId]);
+    if (session?.kind === "authenticated") {
+      setNdaStatus({
+        hasEnvelope: true, envelopeId: data.envelopeId, envelopeStatus: data.status,
+        envelopeProvider: data.provider, providerTestMode: data.testMode,
+        hasAccess: data.status === "signed", grantId: null,
+      });
+      setNotice(data.testMode
+        ? "Dropbox Sign test NDA emailed. Test signatures are not legally binding. Return here to refresh verification."
+        : "Signature request emailed. Return here to refresh verification.");
+      setScreen("teaser");
+    } else {
+      setScreen("nda-confirm");
+    }
+  }, [listingId, session]);
 
   const handleSign = useCallback(async () => {
     if (!pendingEnvelopeId || !listingId) return;
@@ -845,8 +929,16 @@ export default function DealRoomPage() {
         </div>
       </nav>
 
-      {/* Demo Mode Banner */}
-      <DemoModeBanner session={session} onSwitch={switchRole} />
+      {/* Review / account session banner */}
+      <DemoModeBanner session={session} demoAccess={demoAccess} hasAccountLogin={hasAccountLogin} onSwitch={switchRole} onUseAccount={useAccountSession} />
+
+      {notice && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div className="border border-luxe-bronze/30 bg-luxe-bronze/5 px-4 py-3 text-xs text-luxe-text">
+            {notice}
+          </div>
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -868,6 +960,7 @@ export default function DealRoomPage() {
           ndaStatus={ndaStatus}
           onRequestNDA={handleRequestNDA}
           onViewConfidential={handleViewConfidential}
+          onRefreshStatus={refreshStatus}
           loading={loading}
         />
       )}

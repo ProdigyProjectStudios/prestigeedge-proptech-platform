@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { registerDealRoomRoutes } from "./dealroom/routes";
+import { enforcePublicClientRole } from "./public-registration-policy";
 import { emailService } from "./services/email";
 import {
   loginSchema,
@@ -56,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
-      const validatedData = insertUserSchema.parse(req.body);
+      const validatedData = enforcePublicClientRole(insertUserSchema.parse(req.body));
       
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(validatedData.email);

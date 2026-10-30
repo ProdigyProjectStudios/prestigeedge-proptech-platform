@@ -1,10 +1,11 @@
 import jwt from "jsonwebtoken";
+import { selectJwtSecret } from "./auth-security";
 import bcrypt from "bcryptjs";
 import { type User } from "@shared/schema";
 import { storage } from "./storage";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key";
+const JWT_SECRET = selectJwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 export interface AuthenticatedRequest extends Request {

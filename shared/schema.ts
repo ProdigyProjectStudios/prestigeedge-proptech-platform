@@ -304,10 +304,16 @@ export const dealroomEnvelopes = pgTable("dealroom_envelopes", {
   buyerName: text("buyer_name").notNull(),
   status: varchar("status", { length: 12 }).notNull(),
   provider: varchar("provider", { length: 120 }).notNull(),
+  providerRequestId: varchar("provider_request_id", { length: 150 }),
+  buyerPrincipalId: uuid("buyer_principal_id").references(() => users.id),
+  signerEmail: varchar("signer_email", { length: 255 }),
+  providerTestMode: boolean("provider_test_mode"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   signedAt: timestamp("signed_at", { withTimezone: true }),
 }, (table) => [
   index("dealroom_envelopes_listing_idx").on(table.listingId),
+  uniqueIndex("dealroom_envelopes_provider_id_uidx").on(table.providerRequestId),
+  uniqueIndex("dealroom_envelopes_principal_listing_uidx").on(table.listingId, table.buyerPrincipalId),
   uniqueIndex("dealroom_envelopes_session_listing_uidx").on(table.listingId, table.buyerSessionHash),
 ]);
 
@@ -316,10 +322,12 @@ export const dealroomGrants = pgTable("dealroom_grants", {
   listingId: varchar("listing_id", { length: 120 }).notNull(),
   buyerSessionHash: varchar("buyer_session_hash", { length: 64 }).notNull().references(() => dealroomSessions.sessionTokenHash),
   buyerName: text("buyer_name").notNull(),
+  buyerPrincipalId: uuid("buyer_principal_id").references(() => users.id),
   envelopeId: uuid("envelope_id").notNull().references(() => dealroomEnvelopes.envelopeId),
   grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("dealroom_grants_listing_idx").on(table.listingId),
+  uniqueIndex("dealroom_grants_principal_listing_uidx").on(table.listingId, table.buyerPrincipalId),
   uniqueIndex("dealroom_grants_session_listing_uidx").on(table.listingId, table.buyerSessionHash),
 ]);
 
@@ -332,6 +340,18 @@ export const dealroomAudit = pgTable("dealroom_audit", {
   detail: text("detail").notNull(),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("dealroom_audit_listing_time_idx").on(table.listingId, table.occurredAt)]);
+
+export const dealroomProviderEvents = pgTable("dealroom_provider_events", {
+  id: uuid("id").primaryKey(),
+  providerRequestId: varchar("provider_request_id", { length: 150 }).notNull(),
+  eventType: varchar("event_type", { length: 100 }).notNull(),
+  eventTime: bigint("event_time", { mode: "number" }).notNull(),
+  eventHash: varchar("event_hash", { length: 64 }).notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("dealroom_provider_events_request_idx").on(table.providerRequestId, table.receivedAt),
+  uniqueIndex("dealroom_provider_events_dedupe_uidx").on(table.providerRequestId, table.eventType, table.eventTime, table.eventHash),
+]);
 
 // Create insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({

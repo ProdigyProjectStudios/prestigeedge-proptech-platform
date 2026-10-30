@@ -80,3 +80,30 @@ export async function completeDemoSignature(envelopeId: string, session: DemoSes
   memory.addAuditEntry(envelope.listingId, "access_grant_created", session, `Access grant ${grant.grantId} created for ${session.name}`);
   return { kind: "ok", grant, alreadySigned: false };
 }
+
+
+// External NDA signing is never available in memory mode.
+export function reserveProviderEnvelope(listingId: string, session: DemoSession, signerEmail: string, testMode: boolean) {
+  if (!isPersistent()) throw new Error("Provider NDA issuance requires PostgreSQL");
+  return postgres.reserveProviderEnvelope(listingId, session, signerEmail, testMode);
+}
+
+export function recordProviderRequest(envelopeId: string, providerRequestId: string) {
+  if (!isPersistent()) throw new Error("Provider NDA issuance requires PostgreSQL");
+  return postgres.recordProviderRequest(envelopeId, providerRequestId);
+}
+
+export function findProviderEnvelope(providerRequestId: string) {
+  if (!isPersistent()) throw new Error("Provider callback handling requires PostgreSQL");
+  return postgres.findProviderEnvelope(providerRequestId);
+}
+
+export function completeVerifiedProviderSignature(input: {
+  providerRequestId: string;
+  eventType: string;
+  eventTime: number;
+  eventHash: string;
+}) {
+  if (!isPersistent()) throw new Error("Provider callback handling requires PostgreSQL");
+  return postgres.completeVerifiedProviderSignature(input);
+}
