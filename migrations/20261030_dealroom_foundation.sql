@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS dealroom_envelopes (
   provider varchar(120) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   signed_at timestamptz,
-  UNIQUE(listing_id, buyer_session_hash)
+  CONSTRAINT dealroom_envelopes_session_listing_uidx UNIQUE(listing_id, buyer_session_hash)
 );
 CREATE INDEX IF NOT EXISTS dealroom_envelopes_listing_idx ON dealroom_envelopes(listing_id);
 CREATE TABLE IF NOT EXISTS dealroom_grants (
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS dealroom_grants (
   buyer_name text NOT NULL,
   envelope_id uuid NOT NULL REFERENCES dealroom_envelopes(envelope_id),
   granted_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(listing_id, buyer_session_hash)
+  CONSTRAINT dealroom_grants_session_listing_uidx UNIQUE(listing_id, buyer_session_hash)
 );
 CREATE INDEX IF NOT EXISTS dealroom_grants_listing_idx ON dealroom_grants(listing_id);
 CREATE TABLE IF NOT EXISTS dealroom_audit (
