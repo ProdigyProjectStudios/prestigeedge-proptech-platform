@@ -1,29 +1,30 @@
-name: Deal Room foundation
+name: Prestige Edge CI
+
+# Every PR and main-branch update gets a clean install, HTTP/security tests and build.
+# Database migration and live-provider checks remain explicit staging release gates.
 on:
   pull_request:
-    paths:
-      - "server/dealroom/**"
-      - "shared/schema.ts"
-      - "server/index.ts"
-      - "package.json"
-      - "package-lock.json"
-      - "tests/dealroom-*.test.ts"
-      - ".github/workflows/dealroom-validation.yml"
   push:
     branches:
-      - "feat/dealroom-durable-security-foundation"
+      - main
+      - feat/dealroom-durable-security-foundation
+
 permissions:
   contents: read
+
 jobs:
-  check:
+  test-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-      - run: npm ci
-      - run: npm run test:dealroom
-      - run: npm run build
+          cache: npm
+      - name: Clean install from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Deal Room HTTP and security tests
+        run: npm run test:dealroom
+      - name: Production client/server build
+        run: npm run build
