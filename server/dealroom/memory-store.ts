@@ -21,7 +21,11 @@ export interface Envelope {
   buyerSessionToken: string;
   buyerName: string;
   status: EnvelopeStatus;
-  provider: "DemoSignatureProvider";
+  provider: string;
+  providerRequestId?: string;
+  buyerPrincipalId?: string;
+  signerEmail?: string;
+  providerTestMode?: boolean;
   createdAt: Date;
   signedAt?: Date;
 }
@@ -32,6 +36,7 @@ export interface AccessGrant {
   buyerSessionToken: string;
   buyerName: string;
   envelopeId: string;
+  buyerPrincipalId?: string;
   grantedAt: Date;
 }
 
@@ -40,6 +45,8 @@ export type AuditEvent =
   | "nda_requested"
   | "envelope_created"
   | "demo_signature_completed"
+  | "provider_nda_sent"
+  | "provider_signature_verified"
   | "access_grant_created"
   | "confidential_accessed"
   | "cim_accessed";
