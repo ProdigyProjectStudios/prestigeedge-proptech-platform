@@ -57,7 +57,7 @@ VALUES ('33333333-3333-4333-8333-333333333333',
         'dealstage_changed',
         '{"listingId":"MNA-2047","stage":"qualified","synthetic":true}'::jsonb);
 
-DO $
+DO $$
 DECLARE count_grants integer;
 BEGIN
   SELECT COUNT(*) INTO count_grants
