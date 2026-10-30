@@ -26,7 +26,7 @@ jobs:
       - name: Deal Room HTTP, authorization, and provider-signature tests
         run: npm run test:dealroom
       - name: Type-check Dropbox Sign service and callback verification
-        run: npx tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --esModuleInterop --types node server/dealroom/dropbox-sign.ts server/dealroom/dropbox-callback.ts tests/dealroom-dropbox.test.ts tests/dealroom-dropbox-callback.test.ts
+        run: npx tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --esModuleInterop --types node server/dealroom/dropbox-sign.ts server/dealroom/dropbox-callback.ts tests/dealroom-dropbox.test.ts tests/dealroom-dropbox-callback.test.ts server/dealroom/vault-crypto.ts tests/dealroom-vault.test.ts
       - name: Guard touched Deal Room files against TypeScript errors
         shell: bash
         run: |
@@ -63,10 +63,12 @@ jobs:
           set -euo pipefail
           docker cp migrations/20261030_dealroom_foundation.sql "$PG_SERVICE:/tmp/foundation.sql"
           docker cp migrations/20261030_dealroom_signatures.sql "$PG_SERVICE:/tmp/signatures.sql"
+          docker cp migrations/20261030_dealroom_vault.sql "$PG_SERVICE:/tmp/vault.sql"
           docker cp tests/sql/dealroom-migration-smoke.sql "$PG_SERVICE:/tmp/smoke.sql"
           docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -c 'CREATE TABLE users (id uuid PRIMARY KEY)'
           for cycle in 1 2; do
             docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/foundation.sql
             docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/signatures.sql
+            docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/vault.sql
           done
           docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/smoke.sql

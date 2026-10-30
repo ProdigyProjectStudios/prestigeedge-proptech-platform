@@ -12,6 +12,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -351,6 +352,42 @@ export const dealroomProviderEvents = pgTable("dealroom_provider_events", {
 }, (table) => [
   index("dealroom_provider_events_request_idx").on(table.providerRequestId, table.receivedAt),
   uniqueIndex("dealroom_provider_events_dedupe_uidx").on(table.providerRequestId, table.eventType, table.eventTime, table.eventHash),
+]);
+
+// Restricted PDF vault (synthetic test data only until tenant classification is implemented).
+const pgBytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return "bytea"; },
+});
+
+export const dealroomDocuments = pgTable("dealroom_documents", {
+  id: uuid("id").primaryKey(),
+  listingId: varchar("listing_id", { length: 120 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("active"),
+  currentVersion: integer("current_version").notNull().default(1),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("dealroom_documents_listing_idx").on(table.listingId,table.status,table.createdAt),
+]);
+
+export const dealroomDocumentVersions = pgTable("dealroom_document_versions", {
+  id: uuid("id").primaryKey(),
+  documentId: uuid("document_id").notNull().references(() => dealroomDocuments.id),
+  version: integer("version").notNull(),
+  filename: varchar("filename", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 100 }).notNull().default("application/pdf"),
+  originalLength: integer("original_length").notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull(),
+  iv: pgBytea("iv").notNull(),
+  authTag: pgBytea("auth_tag").notNull(),
+  ciphertext: pgBytea("ciphertext").notNull(),
+  uploadedBy: uuid("uploaded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("dealroom_doc_versions_document_idx").on(table.documentId,table.version),
+  uniqueIndex("dealroom_doc_version_unique").on(table.documentId,table.version),
 ]);
 
 // Create insert schemas

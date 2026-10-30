@@ -1,8 +1,12 @@
 import { pool } from "../db";
 import { postgresDealRoomEnabled } from "./security";
+import { vaultConfigured } from "./vault-crypto";
 
 /** Fail startup rather than silently reverting sensitive workflows to memory. */
 export async function ensureDealRoomStorageReady(): Promise<void> {
+  if (process.env.DEALROOM_VAULT_ENABLED === "true" && !vaultConfigured()) {
+    throw new Error("Vault requires PostgreSQL and a 64-digit hex encryption key");
+  }
   if (!postgresDealRoomEnabled()) return;
   const tables = ["dealroom_sessions", "dealroom_envelopes", "dealroom_grants", "dealroom_audit"];
   const result = await pool.query(
@@ -16,6 +20,20 @@ export async function ensureDealRoomStorageReady(): Promise<void> {
       "Deal Room PostgreSQL is selected but migration 20261030_dealroom_foundation.sql has not been applied. Missing: " +
       missing.join(", "),
     );
+  }
+  if (process.env.DEALROOM_VAULT_ENABLED === "true") {
+    if (!vaultConfigured()) {
+      throw new Error("Encrypted vault needs PostgreSQL and 32-byte hex DEALROOM_DOCUMENT_ENCRYPTION_KEY");
+    }
+    const requiredVaultTables = ["dealroom_documents", "dealroom_document_versions"];
+    const vaultResult = await pool.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name = ANY($1::text[])",
+      [requiredVaultTables],
+    );
+    const available = new Set(vaultResult.rows.map((row: { table_name: string }) => row.table_name));
+    if (requiredVaultTables.some(t => !available.has(t))) {
+      throw new Error("Encrypted vault needs migration 20261030_dealroom_vault.sql");
+    }
   }
   if (process.env.DEALROOM_SIGNATURE_PROVIDER === "dropbox") {
     if (!present.has("dealroom_provider_events")) {
