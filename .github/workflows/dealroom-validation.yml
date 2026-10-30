@@ -27,6 +27,15 @@ jobs:
         run: npm run test:dealroom
       - name: Type-check Dropbox Sign service and callback verification
         run: npx tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --esModuleInterop --types node server/dealroom/dropbox-sign.ts server/dealroom/dropbox-callback.ts tests/dealroom-dropbox.test.ts tests/dealroom-dropbox-callback.test.ts
+      - name: Guard touched Deal Room files against TypeScript errors
+        shell: bash
+        run: |
+          npm run check > "$RUNNER_TEMP/prestigeedge-tsc.log" 2>&1 || true
+          if grep -E '^(server/dealroom/|client/src/pages/deal-room\.tsx|server/(auth-security|public-registration-policy)\.ts)' "$RUNNER_TEMP/prestigeedge-tsc.log"; then
+            echo "TypeScript reported errors in Deal Room files"
+            exit 1
+          fi
+          echo "No TypeScript diagnostics in touched Deal Room files; full-project baseline may still contain errors"
       - name: Production client/server build
         run: npm run build
 
