@@ -4,6 +4,9 @@ import { vaultConfigured } from "./vault-crypto";
 
 /** Fail startup rather than silently reverting sensitive workflows to memory. */
 export async function ensureDealRoomStorageReady(): Promise<void> {
+  if (process.env.DEALROOM_VAULT_ENABLED === "true" && !vaultConfigured()) {
+    throw new Error("Vault requires PostgreSQL and a 64-digit hex encryption key");
+  }
   if (!postgresDealRoomEnabled()) return;
   const tables = ["dealroom_sessions", "dealroom_envelopes", "dealroom_grants", "dealroom_audit"];
   const result = await pool.query(
