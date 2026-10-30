@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
+import { DocumentVaultPanel } from "@/components/dealroom/document-vault";
 import { Shield, Lock, FileText, ChevronLeft, CheckCircle, AlertCircle, Clock, Eye, Download, User, Settings, Search, Building2, TrendingUp, MapPin, Users, ChevronRight, Loader2 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -124,6 +125,12 @@ const EVENT_LABELS: Record<string, string> = {
   nda_requested: "NDA Requested",
   envelope_created: "Envelope Created",
   demo_signature_completed: "Signature Completed",
+  provider_nda_sent: "Provider NDA Sent",
+  provider_signature_verified: "Provider Signature Verified",
+  vault_document_uploaded: "Vault Document Uploaded",
+  vault_document_versioned: "Vault Document Versioned",
+  vault_document_downloaded: "Vault Document Downloaded",
+  vault_document_revoked: "Vault Document Revoked",
   access_grant_created: "Access Grant Created",
   confidential_accessed: "Confidential Record Accessed",
   cim_accessed: "CIM Accessed",
@@ -134,6 +141,12 @@ const EVENT_ICONS: Record<string, typeof Eye> = {
   nda_requested: FileText,
   envelope_created: FileText,
   demo_signature_completed: CheckCircle,
+  provider_nda_sent: FileText,
+  provider_signature_verified: Shield,
+  vault_document_uploaded: FileText,
+  vault_document_versioned: FileText,
+  vault_document_downloaded: Download,
+  vault_document_revoked: Lock,
   access_grant_created: Shield,
   confidential_accessed: Lock,
   cim_accessed: Download,
@@ -976,17 +989,31 @@ export default function DealRoomPage() {
       )}
 
       {screen === "confidential" && confidentialRecord && grantId && (
-        <ConfidentialScreen
-          record={confidentialRecord}
-          cim={cim}
-          grantId={grantId}
-          onLoadCIM={handleLoadCIM}
-          cimLoading={loading}
-        />
+        <>
+          <ConfidentialScreen
+            record={confidentialRecord}
+            cim={cim}
+            grantId={grantId}
+            onLoadCIM={handleLoadCIM}
+            cimLoading={loading}
+          />
+          {session?.kind === "authenticated" && listingId && (
+            <div className="max-w-4xl mx-auto px-4 pb-12">
+              <DocumentVaultPanel listingId={listingId} staff={false} />
+            </div>
+          )}
+        </>
       )}
 
       {screen === "admin" && adminData && loading === false && (
-        <AdminScreen data={adminData} />
+        <>
+          <AdminScreen data={adminData} />
+          {session?.kind === "authenticated" && listingId && (
+            <div className="max-w-5xl mx-auto px-4 pb-12">
+              <DocumentVaultPanel listingId={listingId} staff />
+            </div>
+          )}
+        </>
       )}
       {screen === "admin" && loading && (
         <div className="flex items-center justify-center py-24">
