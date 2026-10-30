@@ -58,15 +58,12 @@ export function signatureConfiguration(env: NodeJS.ProcessEnv = process.env): Dr
 export function canIssueNdaForListing(
   listingId: string,
   config: DropboxSignConfig,
-  env: NodeJS.ProcessEnv = process.env,
+  _env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (listingId === "MNA-2047") return config.testMode;
-  // Do not expose real inventory until the public catalogue / confidential vault
-  // classification and NDA contract have received explicit deployment signoff.
-  return !config.testMode &&
-    env.DEALROOM_REAL_INVENTORY_CLASSIFIED === "true" &&
-    env.DEALROOM_NDA_LEGAL_APPROVED === "true" &&
-    env.DEALROOM_LIVE_SIGNATURES_ENABLED === "true";
+  // Phase 2 is intentionally limited to the fictional showcase case.
+  // No environment flag can override missing email verification, tenant ownership,
+  // private inventory classification, or legal production review.
+  return listingId === "MNA-2047" && config.testMode;
 }
 
 export function secureCompareHex(left: string, right: string): boolean {
