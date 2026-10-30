@@ -1,4 +1,5 @@
 import { describe, it } from "node:test";
+import { DemoSignatureProvider } from "../server/dealroom/signature-provider";
 import assert from "node:assert/strict";
 import { demoAccessEnabled, demoListingAllowed, hashSessionToken, postgresDealRoomEnabled } from "../server/dealroom/security";
 
@@ -20,6 +21,9 @@ describe("Deal Room security boundaries", () => {
     assert.match(hashSessionToken("example-bearer-token"), /^[a-f0-9]{64}$/);
     assert.notEqual(hashSessionToken("example-bearer-token"), "example-bearer-token");
     assert.notEqual(hashSessionToken("example-bearer-token"), hashSessionToken("another-token"));
+  });
+  it("never treats a demo webhook secret as a verified external signature", () => {
+    assert.equal(new DemoSignatureProvider().verifyWebhook({}, "demo-webhook-secret"), false);
   });
   it("requires an explicit switch for PostgreSQL", () => {
     assert.equal(postgresDealRoomEnabled({}), false);
