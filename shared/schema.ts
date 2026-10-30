@@ -390,6 +390,52 @@ export const dealroomDocumentVersions = pgTable("dealroom_document_versions", {
   uniqueIndex("dealroom_doc_version_unique").on(table.documentId,table.version),
 ]);
 
+// Synthetic-only operational deal tracking, tasks and reliable CRM delivery queue.
+export const dealroomDeals = pgTable("dealroom_deals", {
+  id: uuid("id").primaryKey(),
+  listingId: varchar("listing_id", { length: 120 }).notNull(),
+  buyerId: uuid("buyer_id").notNull().references(() => users.id),
+  ownerId: uuid("owner_id").notNull().references(() => users.id),
+  stage: varchar("stage", { length: 32 }).notNull().default("qualified"),
+  crmObjectId: varchar("crm_object_id", { length: 120 }),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("dealroom_deals_listing_idx").on(table.listingId,table.stage,table.updatedAt),
+  uniqueIndex("dealroom_deals_buyer_listing_uidx").on(table.listingId,table.buyerId),
+]);
+
+export const dealroomTasks = pgTable("dealroom_tasks", {
+  id: uuid("id").primaryKey(),
+  dealId: uuid("deal_id").notNull().references(() => dealroomDeals.id),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description").notNull().default(""),
+  assignedTo: uuid("assigned_to").notNull().references(() => users.id),
+  status: varchar("status", { length: 16 }).notNull().default("open"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [index("dealroom_tasks_deal_idx").on(table.dealId, table.status, table.dueAt)]);
+
+export const dealroomCrmOutbox = pgTable("dealroom_crm_outbox", {
+  id: uuid("id").primaryKey(),
+  dealId: uuid("deal_id").notNull().references(() => dealroomDeals.id),
+  eventType: varchar("event_type", { length: 50 }).notNull(),
+  status: varchar("status", { length: 22 }).notNull().default("pending"),
+  payload: jsonb("payload").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  externalObjectId: varchar("external_object_id", { length: 120 }),
+  lastError: varchar("last_error", { length: 200 }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("dealroom_crm_outbox_ready_idx").on(table.status, table.availableAt, table.createdAt),
+  index("dealroom_crm_outbox_deal_idx").on(table.dealId, table.createdAt),
+]);
+
 // Create insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
