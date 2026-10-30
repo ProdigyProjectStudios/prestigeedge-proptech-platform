@@ -69,7 +69,7 @@ describe("Dropbox Sign verification and release gates", () => {
       DEALROOM_REAL_INVENTORY_CLASSIFIED: "true",
       DEALROOM_NDA_LEGAL_APPROVED: "true",
       DEALROOM_LIVE_SIGNATURES_ENABLED: "true",
-    }), true);
+    }), false);
   });
   it("rejects malformed and tampered event signatures", () => {
     const event_time = "1793394000";
