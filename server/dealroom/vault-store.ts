@@ -220,6 +220,10 @@ export async function readVaultDocument(
   );
   const row = r.rows[0] as Row | undefined;
   if (!row) return null;
+  if (actor.role === "buyer" &&
+      !(await hasProviderSignatureGrant(String(row.listing_id), actor.principalId))) {
+    throw new Error("Verified external NDA grant required for document access");
+  }
   const data: VaultCiphertext = {
     iv: row.iv as Buffer, tag: row.auth_tag as Buffer,
     ciphertext: row.ciphertext as Buffer,
