@@ -53,7 +53,11 @@ export type AuditEvent =
   | "vault_document_uploaded"
   | "vault_document_versioned"
   | "vault_document_revoked"
-  | "vault_document_downloaded";
+  | "vault_document_downloaded"
+  | "ops_deal_created"
+  | "ops_stage_changed"
+  | "ops_task_created"
+  | "ops_task_updated";
 
 export interface AuditEntry {
   id: string;
