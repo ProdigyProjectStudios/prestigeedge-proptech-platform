@@ -1,5 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import { canIssueNdaForListing, DropboxSignClient, signatureConfiguration } from "./dropbox-sign";
+import { processDropboxCallback } from "./dropbox-callback";
 import { authenticateToken, type AuthenticatedRequest } from "../auth";
 import { demoAccessEnabled, demoListingAllowed } from "./security";
 import * as store from "./store";
@@ -156,15 +159,36 @@ function ensureListingScope(session: store.DemoSession, id: string, res: Respons
 }
 
 export function registerDealRoomRoutes(app: Express) {
+  const callbackBody = multer({ limits: { fields: 2, files: 0, fieldSize: 128_000 } }).none();
   // Introspection prevents clients from conflating a simulated workflow with verified signing.
   app.get("/api/dealroom/capabilities", safe(async (_req, res) => {
     return res.json({
       demoAccess: demoAccessEnabled(),
       durableStorage: store.isPersistent(),
-      verifiedProviderSigning: false,
+      verifiedProviderSigning: Boolean(signatureConfiguration()),
+      signingMode: signatureConfiguration()?.testMode === true ? "test" : (signatureConfiguration()?.testMode === false ? "live" : "off"),
       privateDocumentVault: false,
       crmOutboundSync: false,
     });
+  }));
+
+
+  // Dropbox Sign sends multipart/form-data with a 'json' field.
+  // A provider event is NEVER sufficient to authorize access without an independent GET.
+  app.post("/api/dealroom/webhooks/dropbox", callbackBody, safe(async (req, res) => {
+    const config = signatureConfiguration();
+    if (!config) return res.status(503).json({ error: "Signing provider disabled." });
+    const client = new DropboxSignClient(config);
+    const decision = await processDropboxCallback(req.body, config, {
+      findProviderEnvelope: store.findProviderEnvelope,
+      readProviderStatus: id => client.getSignatureRequest(id),
+      commitVerified: store.completeVerifiedProviderSignature,
+    });
+    if (!decision.accepted) {
+      return res.status(decision.status).json({ error: "Signature callback not accepted." });
+    }
+    // Required by Dropbox Sign's event-delivery acknowledgement contract.
+    return res.status(200).type("text/plain").send("Hello API Event Received");
   }));
 
   // The demo endpoint intentionally allows buyer/admin role switching for synthetic MNA-2047.
@@ -234,6 +258,8 @@ export function registerDealRoomRoutes(app: Express) {
       hasEnvelope: !!envelope,
       envelopeId: envelope?.envelopeId ?? null,
       envelopeStatus: envelope?.status ?? null,
+      envelopeProvider: envelope?.provider ?? null,
+      providerTestMode: envelope?.providerTestMode ?? null,
       hasAccess: !!grant,
       grantId: grant?.grantId ?? null,
     });
@@ -244,9 +270,62 @@ export function registerDealRoomRoutes(app: Express) {
     if (!session) return;
     const { id } = req.params;
     if (!ensureListingScope(session, id, res)) return;
-    // Do NOT issue a real-account NDA from a simulated signature provider.
     if (session.kind === "authenticated") {
-      return res.status(503).json({ error: "Verified e-signature provider not configured. No access has been granted." });
+      const config = signatureConfiguration();
+      if (!config) {
+        return res.status(503).json({ error: "External signing is not configured." });
+      }
+      if (!canIssueNdaForListing(id, config)) {
+        return res.status(403).json({ error: "Signing this listing requires approved confidential-inventory and NDA controls." });
+      }
+      const teaser = await resolveTeaser(id);
+      if (!teaser) return res.status(404).json({ error: "Listing not found." });
+      if (!session.principalId) return res.status(401).json({ error: "Authenticated identity required." });
+      const buyer = await storage.getUser(session.principalId);
+      if (!buyer?.isActive || !buyer.email) {
+        return res.status(403).json({ error: "An active buyer with a verified account email is required." });
+      }
+      const reserved = await store.reserveProviderEnvelope(id, session, buyer.email, config.testMode);
+      if (!reserved.created) {
+        if (reserved.envelope.status === "created") {
+          return res.status(409).json({
+            error: "An NDA request is already pending provider reconciliation. Contact an administrator; do not resend.",
+          });
+        }
+        return res.json({
+          envelopeId: reserved.envelope.envelopeId,
+          status: reserved.envelope.status,
+          provider: "DropboxSign",
+          testMode: reserved.envelope.providerTestMode,
+          alreadyExisted: true,
+        });
+      }
+
+      // External sends are not repeated automatically after ambiguous provider/network errors.
+      let issued;
+      try {
+        issued = await new DropboxSignClient(config).sendTemplatedNda({
+          envelopeId: reserved.envelope.envelopeId,
+          listingId: id,
+          buyerName: buyer.name,
+          buyerEmail: buyer.email,
+        });
+      } catch {
+        return res.status(502).json({
+          error: "NDA delivery could not be confirmed. It is reserved for manual reconciliation; do not retry.",
+        });
+      }
+      // If this update fails after provider delivery, the reservation intentionally blocks re-sending.
+      const saved = await store.recordProviderRequest(reserved.envelope.envelopeId, issued.providerRequestId);
+      await store.addAuditEntry(id, "nda_requested", session, session.name + " requested provider NDA for " + id);
+      await store.addAuditEntry(id, "provider_nda_sent", session, "Dropbox Sign NDA request issued for " + id);
+      return res.status(201).json({
+        envelopeId: saved.envelopeId,
+        status: saved.status,
+        provider: "DropboxSign",
+        testMode: issued.testMode,
+        delivery: "email",
+      });
     }
     const teaser = await resolveTeaser(id);
     if (!teaser) return res.status(404).json({ error: "Listing not found." });
