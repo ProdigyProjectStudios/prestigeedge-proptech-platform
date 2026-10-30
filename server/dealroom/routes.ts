@@ -297,7 +297,7 @@ export function registerDealRoomRoutes(app: Express) {
     if (!grant) {
       return res.status(403).json({
         error: "Access denied.",
-        reason: "A completed and verified NDA is required for confidential details.",
+        reason: "A completed demo NDA or verified production signature is required for confidential details.",
         code: "NO_ACCESS_GRANT",
       });
     }
