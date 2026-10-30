@@ -21,6 +21,20 @@ export async function ensureDealRoomStorageReady(): Promise<void> {
       missing.join(", "),
     );
   }
+  if (process.env.DEALROOM_OPERATIONS_ENABLED === "true") {
+    if (process.env.DEALROOM_STORAGE !== "postgres") {
+      throw new Error("Deal operations require PostgreSQL storage");
+    }
+    const expected = ["dealroom_deals","dealroom_tasks","dealroom_crm_outbox"];
+    const result = await pool.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name = ANY($1::text[])",
+      [expected],
+    );
+    const present = new Set(result.rows.map((row: { table_name: string }) => row.table_name));
+    if (expected.some(name => !present.has(name))) {
+      throw new Error("Deal operations require migration 20261030_dealroom_operations.sql");
+    }
+  }
   if (process.env.DEALROOM_VAULT_ENABLED === "true") {
     if (!vaultConfigured()) {
       throw new Error("Encrypted vault needs PostgreSQL and 32-byte hex DEALROOM_DOCUMENT_ENCRYPTION_KEY");
