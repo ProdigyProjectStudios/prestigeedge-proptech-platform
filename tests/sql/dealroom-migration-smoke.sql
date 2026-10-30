@@ -39,7 +39,7 @@ INSERT INTO dealroom_document_versions(
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 );
 
-DO $
+DO $$
 DECLARE count_grants integer;
 BEGIN
   SELECT COUNT(*) INTO count_grants
