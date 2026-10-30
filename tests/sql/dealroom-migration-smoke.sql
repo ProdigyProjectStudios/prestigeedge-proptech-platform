@@ -39,6 +39,24 @@ INSERT INTO dealroom_document_versions(
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 );
 
+
+INSERT INTO dealroom_deals(id,listing_id,buyer_id,owner_id,stage)
+VALUES ('11111111-1111-4111-8111-111111111111','MNA-2047',
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','qualified');
+
+INSERT INTO dealroom_tasks(id,deal_id,title,description,assigned_to)
+VALUES ('22222222-2222-4222-8222-222222222222',
+        '11111111-1111-4111-8111-111111111111',
+        'Confirm fictional buyer', 'Synthetic CRM workflow',
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+
+INSERT INTO dealroom_crm_outbox(id,deal_id,event_type,payload)
+VALUES ('33333333-3333-4333-8333-333333333333',
+        '11111111-1111-4111-8111-111111111111',
+        'dealstage_changed',
+        '{"listingId":"MNA-2047","stage":"qualified","synthetic":true}'::jsonb);
+
 DO $$
 DECLARE count_grants integer;
 BEGIN
@@ -48,6 +66,11 @@ BEGIN
    WHERE g.listing_id='MNA-2047'
      AND e.buyer_principal_id=g.buyer_principal_id
      AND e.provider_request_id='provider-ci-check-123';
+  IF (SELECT COUNT(*) FROM dealroom_crm_outbox o JOIN dealroom_deals d ON d.id=o.deal_id
+      WHERE d.listing_id='MNA-2047' AND (o.payload->>'synthetic')='true') <> 1 THEN
+    RAISE EXCEPTION 'Expected one synthetic CRM event';
+  END IF;
+
   IF count_grants <> 1 THEN RAISE EXCEPTION 'Expected one linked buyer grant'; END IF;
 
   -- The same principal must not receive a second grant for one listing.

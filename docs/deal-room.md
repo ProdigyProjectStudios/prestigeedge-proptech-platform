@@ -1,5 +1,15 @@
 # PrestigeEdge · Confidential transaction infrastructure
 
+## Advanced operational proof (draft branches)
+
+- [Durable Deal Room](deal-room-foundation.md): expiring sessions, PostgreSQL envelopes, protected grants and audit history.
+- [Verified Dropbox Sign test-mode NDAs](deal-room-signing.md): authenticated buyer issuance, signed callbacks and independent provider status readback.
+- [Encrypted document vault](deal-room-vault.md): synthetic PDF versions, authorized downloads, auditing and revocation.
+- [Deal Operations + HubSpot CRM](deal-room-operations.md): guarded stages, staff tasks and operator-initiated synthetic CRM outbox.
+
+All features above are on stacked draft PRs, not deployed or tested with real customer/provider credentials.
+
+
 **Phase 2 — provider-signing integration (draft feature branch):** [Dropbox Sign setup, verification and release gates](deal-room-signing.md). Template requests, signed callback validation and provider readback are implemented in source and CI-tested using fake transport; actual provider acceptance is pending. No real listings or legally binding signatures are enabled.\n\n**New durable-storage foundation (feature branch):** [implementation, activation and verification guide](deal-room-foundation.md). The opt-in PostgreSQL mode persists sessions, envelopes, grants and audits, and restricts synthetic public demo sessions to MNA-2047. Production signing, vault and CRM are **not yet integrated**.\n\nThe Deal Room is the first implementation of a staged-disclosure workflow for high-value opportunities. It models a transaction lifecycle separately from the public property catalogue and provides buyer and administrator demonstration experiences.
 
 ## Lifecycle

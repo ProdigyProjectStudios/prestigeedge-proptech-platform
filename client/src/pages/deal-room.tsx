@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { DocumentVaultPanel } from "@/components/dealroom/document-vault";
+import { DealOperationsPanel } from "@/components/dealroom/deal-operations";
 import { Shield, Lock, FileText, ChevronLeft, CheckCircle, AlertCircle, Clock, Eye, Download, User, Settings, Search, Building2, TrendingUp, MapPin, Users, ChevronRight, Loader2 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -131,6 +132,10 @@ const EVENT_LABELS: Record<string, string> = {
   vault_document_versioned: "Vault Document Versioned",
   vault_document_downloaded: "Vault Document Downloaded",
   vault_document_revoked: "Vault Document Revoked",
+  ops_deal_created: "Deal Created",
+  ops_stage_changed: "Deal Stage Updated",
+  ops_task_created: "Task Created",
+  ops_task_updated: "Task Updated",
   access_grant_created: "Access Grant Created",
   confidential_accessed: "Confidential Record Accessed",
   cim_accessed: "CIM Accessed",
@@ -147,6 +152,10 @@ const EVENT_ICONS: Record<string, typeof Eye> = {
   vault_document_versioned: FileText,
   vault_document_downloaded: Download,
   vault_document_revoked: Lock,
+  ops_deal_created: Building2,
+  ops_stage_changed: TrendingUp,
+  ops_task_created: FileText,
+  ops_task_updated: CheckCircle,
   access_grant_created: Shield,
   confidential_accessed: Lock,
   cim_accessed: Download,
@@ -1012,6 +1021,9 @@ export default function DealRoomPage() {
             <div className="max-w-5xl mx-auto px-4 pb-12">
               <DocumentVaultPanel listingId={listingId} staff />
             </div>
+          )}
+          {session?.kind === "authenticated" && (
+            <DealOperationsPanel />
           )}
         </>
       )}

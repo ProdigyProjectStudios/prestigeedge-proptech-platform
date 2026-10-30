@@ -4,6 +4,7 @@ import multer from "multer";
 import { canIssueNdaForListing, DropboxSignClient, signatureConfiguration } from "./dropbox-sign";
 import { processDropboxCallback } from "./dropbox-callback";
 import * as vault from "./vault-store";
+import { registerOperationsRoutes } from "./operations-routes";
 import { vaultConfigured, vaultListingAllowed, VAULT_MAX_BYTES } from "./vault-crypto";
 import { authenticateToken, type AuthenticatedRequest } from "../auth";
 import { demoAccessEnabled, demoListingAllowed } from "./security";
@@ -548,4 +549,6 @@ export function registerDealRoomRoutes(app: Express) {
     const safeGrants = grants.map(({ buyerSessionToken: _token, ...grant }) => grant);
     return res.json({ listing: teaser, envelopes: safeEnvelopes, grants: safeGrants, auditLog: auditEntries });
   }));
+  registerOperationsRoutes(app, getSessionFromRequest);
+
 }

@@ -7,6 +7,8 @@ on:
       - main
       - feat/dealroom-durable-security-foundation
       - feat/dealroom-dropbox-sign
+      - feat/dealroom-private-vault
+      - feat/dealroom-ops-crm
 
 permissions:
   contents: read
@@ -26,12 +28,12 @@ jobs:
       - name: Deal Room HTTP, authorization, and provider-signature tests
         run: npm run test:dealroom
       - name: Type-check Dropbox Sign service and callback verification
-        run: npx tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --esModuleInterop --types node server/dealroom/dropbox-sign.ts server/dealroom/dropbox-callback.ts tests/dealroom-dropbox.test.ts tests/dealroom-dropbox-callback.test.ts server/dealroom/vault-crypto.ts tests/dealroom-vault.test.ts
+        run: npx tsc --noEmit --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --esModuleInterop --types node server/dealroom/dropbox-sign.ts server/dealroom/dropbox-callback.ts tests/dealroom-dropbox.test.ts tests/dealroom-dropbox-callback.test.ts server/dealroom/vault-crypto.ts tests/dealroom-vault.test.ts server/dealroom/operations-policy.ts server/dealroom/hubspot-crm.ts tests/dealroom-operations.test.ts
       - name: Guard touched Deal Room files against TypeScript errors
         shell: bash
         run: |
           npm run check > "$RUNNER_TEMP/prestigeedge-tsc.log" 2>&1 || true
-          if grep -E '^(server/dealroom/|client/src/pages/deal-room\.tsx|server/(auth-security|public-registration-policy)\.ts)' "$RUNNER_TEMP/prestigeedge-tsc.log"; then
+          if grep -E '^(server/dealroom/|client/src/pages/deal-room\.tsx|client/src/components/dealroom/|server/(auth-security|public-registration-policy)\.ts)' "$RUNNER_TEMP/prestigeedge-tsc.log"; then
             echo "TypeScript reported errors in Deal Room files"
             exit 1
           fi
@@ -64,11 +66,13 @@ jobs:
           docker cp migrations/20261030_dealroom_foundation.sql "$PG_SERVICE:/tmp/foundation.sql"
           docker cp migrations/20261030_dealroom_signatures.sql "$PG_SERVICE:/tmp/signatures.sql"
           docker cp migrations/20261030_dealroom_vault.sql "$PG_SERVICE:/tmp/vault.sql"
+          docker cp migrations/20261030_dealroom_operations.sql "$PG_SERVICE:/tmp/operations.sql"
           docker cp tests/sql/dealroom-migration-smoke.sql "$PG_SERVICE:/tmp/smoke.sql"
           docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -c 'CREATE TABLE users (id uuid PRIMARY KEY)'
           for cycle in 1 2; do
             docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/foundation.sql
             docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/signatures.sql
             docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/vault.sql
+            docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/operations.sql
           done
           docker exec "$PG_SERVICE" psql -U postgres -d prestigeedge_ci -v ON_ERROR_STOP=1 -f /tmp/smoke.sql
