@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import { canIssueNdaForListing, DropboxSignClient, signatureConfiguration } from "./dropbox-sign";
 import { processDropboxCallback } from "./dropbox-callback";
+import * as vault from "./vault-store";
+import { vaultConfigured, vaultListingAllowed, VAULT_MAX_BYTES } from "./vault-crypto";
 import { authenticateToken, type AuthenticatedRequest } from "../auth";
 import { demoAccessEnabled, demoListingAllowed } from "./security";
 import * as store from "./store";
@@ -160,6 +162,33 @@ function ensureListingScope(session: store.DemoSession, id: string, res: Respons
 
 export function registerDealRoomRoutes(app: Express) {
   const callbackBody = multer({ limits: { fields: 2, files: 0, fieldSize: 128_000 } }).none();
+  const uploadPdf = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: VAULT_MAX_BYTES, files: 1, fields: 1, parts: 2 },
+  }).single("file");
+
+  const parseVaultUpload = (req: Request, res: Response) =>
+    new Promise<void>((resolve, reject) => uploadPdf(req, res, error =>
+      error ? reject(error) : resolve()));
+
+  async function requireVaultActor(req: Request, res: Response, staffOnly = false):
+    Promise<vault.VaultActor | null> {
+    if (!vaultConfigured()) {
+      res.status(503).json({ error: "Encrypted Deal Room vault is not configured." });
+      return null;
+    }
+    const session = await getSessionFromRequest(req);
+    if (!session || session.kind !== "authenticated" || !session.principalId) {
+      res.status(401).json({ error: "Authenticated account required for document vault." });
+      return null;
+    }
+    if (staffOnly && session.role !== "admin") {
+      res.status(403).json({ error: "Agency staff access required." });
+      return null;
+    }
+    return { principalId: session.principalId, name: session.name, role: session.role };
+  }
+
   // Introspection prevents clients from conflating a simulated workflow with verified signing.
   app.get("/api/dealroom/capabilities", safe(async (_req, res) => {
     return res.json({
@@ -167,7 +196,7 @@ export function registerDealRoomRoutes(app: Express) {
       durableStorage: store.isPersistent(),
       verifiedProviderSigning: Boolean(signatureConfiguration()),
       signingMode: signatureConfiguration()?.testMode === true ? "test" : (signatureConfiguration()?.testMode === false ? "live" : "off"),
-      privateDocumentVault: false,
+      privateDocumentVault: vaultConfigured(),
       crmOutboundSync: false,
     });
   }));
@@ -403,6 +432,106 @@ export function registerDealRoomRoutes(app: Express) {
     await store.addAuditEntry(id, "cim_accessed", session, session.name + " accessed synthetic CIM for " + id);
     const cim = await resolveCIM(id);
     return res.json({ cim, grantId: grant.grantId });
+  }));
+
+
+  // The encrypted PDF vault is synthetic-only and ALWAYS requires a verified account.
+  // There is intentionally no path from public demo bearer tokens to vault operations.
+  app.get("/api/dealroom/listings/:id/documents", safe(async (req, res) => {
+    const actor = await requireVaultActor(req, res);
+    if (!actor) return;
+    const { id } = req.params;
+    if (!vaultListingAllowed(id)) return res.status(403).json({ error: "Document vault is limited to synthetic inventory." });
+    if (actor.role === "buyer" && !(await vault.hasProviderSignatureGrant(id, actor.principalId))) {
+      return res.status(403).json({ error: "Verified provider NDA required to list documents." });
+    }
+    res.setHeader("Cache-Control", "no-store");
+    const documents = await vault.listVaultDocuments(id, actor.role === "admin");
+    return res.json({ documents });
+  }));
+
+  app.post("/api/dealroom/listings/:id/documents", safe(async (req, res) => {
+    const actor = await requireVaultActor(req, res, true);
+    if (!actor) return;
+    const { id } = req.params;
+    if (!vaultListingAllowed(id)) return res.status(403).json({ error: "Document vault is limited to synthetic inventory." });
+    await parseVaultUpload(req, res);
+    if (!req.file) return res.status(400).json({ error: "A PDF file is required." });
+    try {
+      const document = await vault.createVaultDocument({
+        listingId: id, title: String(req.body?.title ?? ""),
+        bytes: req.file.buffer, filename: req.file.originalname,
+        mime: req.file.mimetype, actor,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(201).json({ document });
+    } catch (error) {
+      if (error instanceof Error && /(PDF|Invalid title|valid PDF filename)/i.test(error.message)) {
+        return res.status(400).json({ error: error.message });
+      }
+      throw error;
+    }
+  }));
+
+  app.post("/api/dealroom/documents/:id/versions", safe(async (req, res) => {
+    const actor = await requireVaultActor(req, res, true);
+    if (!actor) return;
+    const { id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Invalid document ID." });
+    const prior = await vault.getVaultDocumentMeta(id);
+    if (!prior || !vaultListingAllowed(prior.listingId) || prior.status !== "active") {
+      return res.status(404).json({ error: "Active document not found." });
+    }
+    await parseVaultUpload(req, res);
+    if (!req.file) return res.status(400).json({ error: "A PDF file is required." });
+    try {
+      const document = await vault.addVaultVersion({
+        documentId: id, bytes: req.file.buffer,
+        filename: req.file.originalname, mime: req.file.mimetype, actor,
+      });
+      return res.json({ document });
+    } catch (error) {
+      if (error instanceof Error && /(PDF|valid PDF filename)/i.test(error.message)) {
+        return res.status(400).json({ error: error.message });
+      }
+      throw error;
+    }
+  }));
+
+  app.delete("/api/dealroom/documents/:id", safe(async (req, res) => {
+    const actor = await requireVaultActor(req, res, true);
+    if (!actor) return;
+    const { id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Invalid document ID." });
+    const prior = await vault.getVaultDocumentMeta(id);
+    if (!prior || !vaultListingAllowed(prior.listingId)) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+    const document = await vault.revokeVaultDocument(id, actor);
+    return res.json({ document });
+  }));
+
+  app.get("/api/dealroom/documents/:id/download", safe(async (req, res) => {
+    const actor = await requireVaultActor(req, res);
+    if (!actor) return;
+    const { id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Invalid document ID." });
+    const doc = await vault.getVaultDocumentMeta(id);
+    if (!doc || !vaultListingAllowed(doc.listingId) || doc.status !== "active") {
+      return res.status(404).json({ error: "Document not found." });
+    }
+    if (actor.role === "buyer" &&
+        !(await vault.hasProviderSignatureGrant(doc.listingId, actor.principalId))) {
+      return res.status(403).json({ error: "Verified provider NDA required to download documents." });
+    }
+    const result = await vault.readVaultDocument(id, actor);
+    if (!result) return res.status(404).json({ error: "Document unavailable." });
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox");
+    res.setHeader("Content-Disposition", 'attachment; filename="' + result.metadata.filename + '"');
+    return res.status(200).send(result.bytes);
   }));
 
   app.get("/api/dealroom/admin/listings/:id", safe(async (req, res) => {
