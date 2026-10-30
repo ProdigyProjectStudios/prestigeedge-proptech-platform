@@ -49,7 +49,11 @@ export type AuditEvent =
   | "provider_signature_verified"
   | "access_grant_created"
   | "confidential_accessed"
-  | "cim_accessed";
+  | "cim_accessed"
+  | "vault_document_uploaded"
+  | "vault_document_versioned"
+  | "vault_document_revoked"
+  | "vault_document_downloaded";
 
 export interface AuditEntry {
   id: string;
