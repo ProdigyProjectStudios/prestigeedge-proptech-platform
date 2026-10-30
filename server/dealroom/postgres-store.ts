@@ -5,7 +5,8 @@ import type { AccessGrant, AuditEntry, AuditEvent, DemoRole, DemoSession, Envelo
 
 type Row = Record<string, any>;
 export type SignatureCompletion =
-  | { kind: "missing" | "forbidden" }
+  | { kind: "missing" }
+  | { kind: "forbidden" }
   | { kind: "ok"; grant: AccessGrant; alreadySigned: boolean };
 
 const demoNames: Record<DemoRole, string> = { buyer: "Ava Morgan", admin: "Jordan Lee" };
