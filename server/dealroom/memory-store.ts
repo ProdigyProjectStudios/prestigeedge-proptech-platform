@@ -117,7 +117,7 @@ export function getEnvelopeByBuyer(
   listingId: string,
   sessionToken: string
 ): Envelope | undefined {
-  for (const env of envelopes.values()) {
+  for (const env of Array.from(envelopes.values())) {
     if (env.listingId === listingId && env.buyerSessionToken === sessionToken) {
       return env;
     }
@@ -138,7 +138,7 @@ export function markEnvelopeSigned(envelopeId: string): Envelope | undefined {
 }
 
 export function getAllEnvelopesForListing(listingId: string): Envelope[] {
-  return [...envelopes.values()].filter((e) => e.listingId === listingId);
+  return Array.from(envelopes.values()).filter((e) => e.listingId === listingId);
 }
 
 // ─── Access Grant helpers ─────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export function getAccessGrant(
 }
 
 export function getAllGrantsForListing(listingId: string): AccessGrant[] {
-  return [...accessGrants.values()].filter((g) => g.listingId === listingId);
+  return Array.from(accessGrants.values()).filter((g) => g.listingId === listingId);
 }
 
 // ─── Audit Log helpers ────────────────────────────────────────────────────────
