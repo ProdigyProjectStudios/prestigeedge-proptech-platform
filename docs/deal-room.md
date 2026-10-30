@@ -1,6 +1,6 @@
 # PrestigeEdge · Confidential transaction infrastructure
 
-The Deal Room is the first implementation of a staged-disclosure workflow for high-value opportunities. It models a transaction lifecycle separately from the public property catalogue and provides buyer and administrator demonstration experiences.
+**New durable-storage foundation (feature branch):** [implementation, activation and verification guide](deal-room-foundation.md). The opt-in PostgreSQL mode persists sessions, envelopes, grants and audits, and restricts synthetic public demo sessions to MNA-2047. Production signing, vault and CRM are **not yet integrated**.\n\nThe Deal Room is the first implementation of a staged-disclosure workflow for high-value opportunities. It models a transaction lifecycle separately from the public property catalogue and provides buyer and administrator demonstration experiences.
 
 ## Lifecycle
 
@@ -30,9 +30,9 @@ flowchart TD
 
 ## Identity and grants
 
-The server issues opaque UUID session tokens. Requests send them through `X-DR-Session`. Grants are keyed by session and listing, keeping one listing's grant separate from another.
+The server issues opaque bearer session tokens (UUIDs in legacy memory mode; cryptographically random 32-byte tokens in PostgreSQL mode). Requests send them through `X-DR-Session`. Grants are keyed by session and listing, keeping one listing's grant separate from another.
 
-These sessions are independent of the agency's JWT accounts. The public demo session endpoint lets a reviewer select buyer or administrator mode. That enables review of both journeys; it is not production administrator authentication.
+Public demo sessions remain independent of agency JWT accounts and are enabled explicitly in deployed production environments. Authenticated PostgreSQL sessions require the matching active agency JWT on each request. The public demo session endpoint lets a reviewer select buyer or administrator mode. That enables review of both journeys; it is not production administrator authentication.
 
 ## Envelope semantics
 
@@ -52,7 +52,7 @@ Events include:
 - Confidential record accessed.
 - CIM accessed.
 
-Each record carries an actor, event, listing, detail, and timestamp. Events are append operations in process memory, not an immutable or durable compliance ledger.
+Each record carries an actor, event, listing, detail, and timestamp. Events are in process memory in legacy mode; PostgreSQL mode persists ordered event records. These are operational audit records, not a certified immutable compliance ledger.
 
 ## Inventory resolution
 
@@ -77,7 +77,7 @@ A production integration should:
 
 **Established:** a reviewable staged-disclosure experience with server-side checks, envelope ownership, grant lookup, and audit-event capture.
 
-**Next:** durable storage, verified e-signatures, identity binding, record classification, and operational recovery. Current state resets when the process restarts and is not shared between instances.
+**New optional foundation:** PostgreSQL persistence and authenticated session binding. **Next:** verified e-signatures, classified document storage, CRM synchronization, stable buyer identity grants, revocation and operational recovery. Legacy demo mode still resets on restart.
 
 ## Reviewer walkthrough
 
