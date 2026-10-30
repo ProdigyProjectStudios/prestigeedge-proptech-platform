@@ -260,6 +260,16 @@ export async function dispatchOneCrmJob(): Promise<{
        FROM dealroom_crm_outbox o JOIN dealroom_deals d ON d.id=o.deal_id
        WHERE o.status='pending' AND o.available_at<=now()
          AND d.listing_id='MNA-2047'
+         AND NOT EXISTS (
+           SELECT 1 FROM dealroom_crm_outbox prior
+           WHERE prior.deal_id=o.deal_id AND prior.id<>o.id
+             AND prior.status IN ('processing','review_required')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM dealroom_crm_outbox older
+           WHERE older.deal_id=o.deal_id AND older.status='pending'
+             AND (older.created_at,older.id)<(o.created_at,o.id)
+         )
        ORDER BY o.created_at,o.id FOR UPDATE OF o SKIP LOCKED LIMIT 1`,
     );
     event = claimed.rows[0] as Row | undefined;
