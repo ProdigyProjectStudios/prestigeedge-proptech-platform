@@ -11,6 +11,7 @@ import {
   pgEnum,
   jsonb,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -282,6 +283,55 @@ export const propertyViewingsRelations = relations(propertyViewings, ({ one }) =
     references: [users.id],
   }),
 }));
+
+// Durable Deal Room state. Manual SQL migration: migrations/20261030_dealroom_foundation.sql.
+// Review public-catalogue confidentiality separately: Deal Room authorization does not hide /api/properties.
+export const dealroomSessions = pgTable("dealroom_sessions", {
+  sessionTokenHash: varchar("session_token_hash", { length: 64 }).primaryKey(),
+  role: varchar("role", { length: 10 }).notNull(),
+  kind: varchar("kind", { length: 16 }).notNull(),
+  principalId: uuid("principal_id").references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [index("dealroom_sessions_expires_idx").on(table.expiresAt)]);
+
+export const dealroomEnvelopes = pgTable("dealroom_envelopes", {
+  envelopeId: uuid("envelope_id").primaryKey(),
+  listingId: varchar("listing_id", { length: 120 }).notNull(),
+  buyerSessionHash: varchar("buyer_session_hash", { length: 64 }).notNull().references(() => dealroomSessions.sessionTokenHash),
+  buyerName: text("buyer_name").notNull(),
+  status: varchar("status", { length: 12 }).notNull(),
+  provider: varchar("provider", { length: 120 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  signedAt: timestamp("signed_at", { withTimezone: true }),
+}, (table) => [
+  index("dealroom_envelopes_listing_idx").on(table.listingId),
+  uniqueIndex("dealroom_envelopes_session_listing_uidx").on(table.listingId, table.buyerSessionHash),
+]);
+
+export const dealroomGrants = pgTable("dealroom_grants", {
+  grantId: uuid("grant_id").primaryKey(),
+  listingId: varchar("listing_id", { length: 120 }).notNull(),
+  buyerSessionHash: varchar("buyer_session_hash", { length: 64 }).notNull().references(() => dealroomSessions.sessionTokenHash),
+  buyerName: text("buyer_name").notNull(),
+  envelopeId: uuid("envelope_id").notNull().references(() => dealroomEnvelopes.envelopeId),
+  grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("dealroom_grants_listing_idx").on(table.listingId),
+  uniqueIndex("dealroom_grants_session_listing_uidx").on(table.listingId, table.buyerSessionHash),
+]);
+
+export const dealroomAudit = pgTable("dealroom_audit", {
+  id: uuid("id").primaryKey(),
+  listingId: varchar("listing_id", { length: 120 }).notNull(),
+  event: varchar("event", { length: 80 }).notNull(),
+  actorName: text("actor_name").notNull(),
+  actorRole: varchar("actor_role", { length: 10 }).notNull(),
+  detail: text("detail").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("dealroom_audit_listing_time_idx").on(table.listingId, table.occurredAt)]);
 
 // Create insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
