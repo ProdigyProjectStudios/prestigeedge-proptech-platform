@@ -22,7 +22,11 @@ function envelopeFromRow(row: Row, rawToken = ""): Envelope {
     buyerSessionToken: rawToken,
     buyerName: String(row.buyer_name),
     status: row.status as Envelope["status"],
-    provider: "DemoSignatureProvider",
+    provider: String(row.provider),
+    ...(row.provider_request_id ? { providerRequestId: String(row.provider_request_id) } : {}),
+    ...(row.buyer_principal_id ? { buyerPrincipalId: String(row.buyer_principal_id) } : {}),
+    ...(row.signer_email ? { signerEmail: String(row.signer_email) } : {}),
+    ...(typeof row.provider_test_mode === "boolean" ? { providerTestMode: row.provider_test_mode } : {}),
     createdAt: toDate(row.created_at),
     ...(row.signed_at ? { signedAt: toDate(row.signed_at) } : {}),
   };
@@ -35,6 +39,7 @@ function grantFromRow(row: Row, rawToken = ""): AccessGrant {
     buyerSessionToken: rawToken,
     buyerName: String(row.buyer_name),
     envelopeId: String(row.envelope_id),
+    ...(row.buyer_principal_id ? { buyerPrincipalId: String(row.buyer_principal_id) } : {}),
     grantedAt: toDate(row.granted_at),
   };
 }
@@ -108,7 +113,12 @@ export async function createEnvelope(listingId: string, session: DemoSession): P
 
 export async function getEnvelopeByBuyer(listingId: string, rawToken: string): Promise<Envelope | undefined> {
   const response = await pool.query(
-    "SELECT * FROM dealroom_envelopes WHERE listing_id=$1 AND buyer_session_hash=$2",
+    `SELECT e.* FROM dealroom_sessions s
+      JOIN dealroom_envelopes e ON e.listing_id=$1
+       AND (e.buyer_session_hash=s.session_token_hash OR
+            (s.kind='authenticated' AND e.buyer_principal_id=s.principal_id))
+     WHERE s.session_token_hash=$2 AND s.expires_at>now() AND s.revoked_at IS NULL
+     ORDER BY e.created_at DESC LIMIT 1`,
     [listingId, hashSessionToken(rawToken)],
   );
   const row = response.rows[0] as Row | undefined;
@@ -134,7 +144,12 @@ export async function getAllEnvelopesForListing(listingId: string): Promise<Enve
 
 export async function getAccessGrant(listingId: string, rawToken: string): Promise<AccessGrant | undefined> {
   const response = await pool.query(
-    "SELECT * FROM dealroom_grants WHERE listing_id=$1 AND buyer_session_hash=$2",
+    `SELECT g.* FROM dealroom_sessions s
+      JOIN dealroom_grants g ON g.listing_id=$1
+       AND (g.buyer_session_hash=s.session_token_hash OR
+            (s.kind='authenticated' AND g.buyer_principal_id=s.principal_id))
+     WHERE s.session_token_hash=$2 AND s.expires_at>now() AND s.revoked_at IS NULL
+     ORDER BY g.granted_at DESC LIMIT 1`,
     [listingId, hashSessionToken(rawToken)],
   );
   const row = response.rows[0] as Row | undefined;
@@ -227,6 +242,149 @@ export async function completeDemoSignature(envelopeId: string, session: DemoSes
     );
     await client.query("COMMIT");
     return { kind: "ok", grant: grantFromRow(grant, session.sessionToken), alreadySigned: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
+/** External NDA issuance is reserved BEFORE the network call.
+ * A timed-out send remains "created" until manually reconciled, preventing duplicate NDA emails.
+ */
+export async function reserveProviderEnvelope(
+  listingId: string,
+  session: DemoSession,
+  signerEmail: string,
+  testMode: boolean,
+): Promise<{ envelope: Envelope; created: boolean }> {
+  if (session.kind !== "authenticated" || !session.principalId || session.role !== "buyer") {
+    throw new Error("An authenticated buyer is required to issue an external NDA");
+  }
+  const sessionHash = hashSessionToken(session.sessionToken);
+  const inserted = await pool.query(
+    `INSERT INTO dealroom_envelopes(
+       envelope_id,listing_id,buyer_session_hash,buyer_principal_id,buyer_name,
+       status,provider,signer_email,provider_test_mode
+     ) VALUES($1,$2,$3,$4,$5,'created','DropboxSign',$6,$7)
+       ON CONFLICT DO NOTHING RETURNING *`,
+    [randomUUID(), listingId, sessionHash, session.principalId, session.name, signerEmail.toLowerCase(), testMode],
+  );
+  if (inserted.rows[0]) {
+    return { envelope: envelopeFromRow(inserted.rows[0] as Row, session.sessionToken), created: true };
+  }
+  const prior = await pool.query(
+    `SELECT * FROM dealroom_envelopes
+     WHERE listing_id=$1 AND buyer_principal_id=$2
+     ORDER BY created_at DESC LIMIT 1`,
+    [listingId, session.principalId],
+  );
+  const row = prior.rows[0] as Row | undefined;
+  if (!row || row.provider !== "DropboxSign" ||
+      String(row.signer_email).toLowerCase() !== signerEmail.toLowerCase() ||
+      row.provider_test_mode !== testMode) {
+    throw new Error("A conflicting NDA already exists for this buyer and listing");
+  }
+  return { envelope: envelopeFromRow(row, session.sessionToken), created: false };
+}
+
+export async function recordProviderRequest(envelopeId: string, requestId: string): Promise<Envelope> {
+  const updated = await pool.query(
+    `UPDATE dealroom_envelopes SET provider_request_id=$2,status='sent'
+     WHERE envelope_id=$1 AND provider='DropboxSign' AND status='created'
+       AND provider_request_id IS NULL RETURNING *`,
+    [envelopeId, requestId],
+  );
+  if (!updated.rows[0]) throw new Error("External NDA reservation needs manual reconciliation");
+  return envelopeFromRow(updated.rows[0] as Row);
+}
+
+export async function findProviderEnvelope(requestId: string): Promise<Envelope | undefined> {
+  const result = await pool.query(
+    `SELECT * FROM dealroom_envelopes WHERE provider='DropboxSign' AND provider_request_id=$1`,
+    [requestId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  return row ? envelopeFromRow(row) : undefined;
+}
+
+export type ProviderCompletion =
+  | { kind: "missing" | "conflict" }
+  | { kind: "ok"; grant: AccessGrant; alreadySigned: boolean };
+
+/** Only call after verifying the callback HMAC and independently retrieving provider completion. */
+export async function completeVerifiedProviderSignature(input: {
+  providerRequestId: string;
+  eventType: string;
+  eventTime: number;
+  eventHash: string;
+}): Promise<ProviderCompletion> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT * FROM dealroom_envelopes
+       WHERE provider='DropboxSign' AND provider_request_id=$1 FOR UPDATE`,
+      [input.providerRequestId],
+    );
+    const envelope = locked.rows[0] as Row | undefined;
+    if (!envelope) {
+      await client.query("ROLLBACK");
+      return { kind: "missing" };
+    }
+    if (!envelope.buyer_principal_id || !envelope.signer_email ||
+        typeof envelope.provider_test_mode !== "boolean") {
+      await client.query("ROLLBACK");
+      return { kind: "conflict" };
+    }
+    if (envelope.status === "signed") {
+      const past = await client.query(
+        `SELECT * FROM dealroom_grants WHERE listing_id=$1 AND buyer_principal_id=$2`,
+        [envelope.listing_id, envelope.buyer_principal_id],
+      );
+      const existing = past.rows[0] as Row | undefined;
+      if (!existing || existing.envelope_id !== envelope.envelope_id) {
+        throw new Error("Verified NDA grant inconsistency");
+      }
+      await client.query("COMMIT");
+      return { kind: "ok", grant: grantFromRow(existing), alreadySigned: true };
+    }
+    if (envelope.status !== "sent") {
+      await client.query("ROLLBACK");
+      return { kind: "conflict" };
+    }
+    await client.query(
+      `INSERT INTO dealroom_provider_events(id,provider_request_id,event_type,event_time,event_hash)
+       VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+      [randomUUID(), input.providerRequestId, input.eventType, input.eventTime, input.eventHash],
+    );
+    const result = await client.query(
+      `INSERT INTO dealroom_grants(
+         grant_id,listing_id,buyer_session_hash,buyer_principal_id,buyer_name,envelope_id
+       ) VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT DO NOTHING RETURNING *`,
+      [randomUUID(), envelope.listing_id, envelope.buyer_session_hash,
+       envelope.buyer_principal_id, envelope.buyer_name, envelope.envelope_id],
+    );
+    const grant = result.rows[0] as Row | undefined;
+    if (!grant) throw new Error("Another grant exists; manual reconciliation required");
+    await client.query(
+      "UPDATE dealroom_envelopes SET status='signed',signed_at=now() WHERE envelope_id=$1",
+      [envelope.envelope_id],
+    );
+    await client.query(
+      `INSERT INTO dealroom_audit(id,listing_id,event,actor_name,actor_role,detail)
+       VALUES
+         ($1,$2,'provider_signature_verified',$3,'buyer',$4),
+         ($5,$2,'access_grant_created',$3,'buyer',$6)`,
+      [randomUUID(), envelope.listing_id, envelope.buyer_name,
+       "Dropbox Sign completion verified via independent provider API",
+       randomUUID(), "Verified signature grant: " + String(grant.grant_id)],
+    );
+    await client.query("COMMIT");
+    return { kind: "ok", grant: grantFromRow(grant), alreadySigned: false };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
