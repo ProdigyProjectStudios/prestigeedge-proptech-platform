@@ -27,7 +27,19 @@ VALUES (
   'signature_request_all_signed',1793394000,repeat('e',64)
 );
 
-DO $$
+
+INSERT INTO dealroom_documents(id,listing_id,title,created_by)
+VALUES('ffffffff-ffff-4fff-8fff-ffffffffffff','MNA-2047','Synthetic document','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+INSERT INTO dealroom_document_versions(
+  id,document_id,version,filename,original_length,sha256,iv,auth_tag,ciphertext,uploaded_by
+) VALUES (
+  '99999999-9999-4999-8999-999999999999','ffffffff-ffff-4fff-8fff-ffffffffffff',
+  1,'synthetic.pdf',10,repeat('f',64),decode(repeat('aa',12),'hex'),
+  decode(repeat('bb',16),'hex'),decode('1234567890','hex'),
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+);
+
+DO $
 DECLARE count_grants integer;
 BEGIN
   SELECT COUNT(*) INTO count_grants
